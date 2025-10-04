@@ -1,0 +1,263 @@
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { MapPin, Trophy, Users, Image, ArrowRight, Loader2, AlertTriangle, Newspaper, Calendar } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { supabase } from '../lib/supabase';
+import { HomepageBackground, GalleryItem, NewsItem } from '../types';
+import HorizontalGallery from '../components/HorizontalGallery';
+import SectionDivider from '../components/SectionDivider';
+
+const Home: React.FC = () => {
+  const [background, setBackground] = useState<HomepageBackground | null>(null);
+  const [gallery, setGallery] = useState<GalleryItem[]>([]);
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [loading, setLoading] = useState({ bg: true, gallery: true, news: true });
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleError = (err: any, context: string) => {
+      console.error(`Error fetching ${context}:`, err);
+      setError("Could not load page content. Please ensure your Supabase project is connected and the credentials are correct.");
+    };
+
+    const fetchBackground = async () => {
+      const { data, error } = await supabase
+        .from('homepage_background')
+        .select('*')
+        .eq('is_active', true)
+        .single();
+      if (error && error.code !== 'PGRST116') handleError(error, 'background');
+      else setBackground(data);
+      setLoading(prev => ({ ...prev, bg: false }));
+    };
+
+    const fetchGallery = async () => {
+      const { data, error } = await supabase
+        .from('gallery')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(12);
+      if (error) handleError(error, 'gallery');
+      else setGallery(data || []);
+      setLoading(prev => ({ ...prev, gallery: false }));
+    };
+    
+    const fetchNews = async () => {
+      const { data, error } = await supabase
+        .from('news')
+        .select('*')
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(3);
+      if (error) handleError(error, 'news');
+      else setNews(data || []);
+      setLoading(prev => ({ ...prev, news: false }));
+    };
+
+    fetchBackground();
+    fetchGallery();
+    fetchNews();
+  }, []);
+
+  const HeroBackground = () => {
+    if (loading.bg) {
+      return <div className="absolute inset-0 bg-brand-dark-blue flex items-center justify-center"><Loader2 className="w-12 h-12 text-white animate-spin" /></div>;
+    }
+    if (!background || error) {
+      return <div className="absolute inset-0 bg-gradient-to-br from-brand-dark-blue to-brand-mid-blue"></div>;
+    }
+    if (background.type === 'video') {
+      return (
+        <video
+          className="absolute z-0 w-full h-full object-cover"
+          autoPlay
+          loop
+          muted
+          playsInline
+          src={background.url}
+        />
+      );
+    }
+    return (
+      <div
+        className="absolute z-0 w-full h-full bg-cover bg-center"
+        style={{ backgroundImage: `url(${background.url})` }}
+      />
+    );
+  };
+  
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  return (
+    <div className="relative">
+      {error && (
+        <div className="bg-amber-400 text-black p-3 text-center fixed top-16 left-0 right-0 z-[100] flex items-center justify-center gap-2">
+          <AlertTriangle size={16} />
+          {error}
+        </div>
+      )}
+      {/* Hero Section */}
+      <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+        <HeroBackground />
+        <div className="absolute inset-0 bg-gradient-to-t from-brand-dark-blue/70 to-brand-mid-blue/30 z-0"></div>
+
+        <div className="relative z-10 text-center px-4 sm:px-6 lg:px-8 max-w-6xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+            className="mb-12"
+          >
+            <h2 className="text-white text-2xl md:text-3xl font-light mb-4">SSF Muhimmath Daawa Sector</h2>
+            <h1 className="text-white text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-bold mb-6 tracking-wider">
+              Meem Fest
+            </h1>
+            <p className="text-white text-lg md:text-xl">
+              <span>2025</span> OCTOBER 05,06,07,08 <span>Muhimmathul Muslimeen Education Centre </span>
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.6 }}
+            className="flex flex-col sm:flex-row gap-4 justify-center items-center"
+          >
+            <Link
+              to="/results"
+              className="bg-brand-secondary text-white px-8 py-4 rounded-2xl font-semibold hover:brightness-110 transition-all shadow-lg transform hover:-translate-y-0.5"
+            >
+              View Results
+            </Link>
+            <Link
+              to="/about"
+              className="bg-white/10 backdrop-blur-sm text-white px-8 py-4 rounded-2xl font-semibold hover:bg-white/20 transition-colors border border-white/20"
+            >
+              Learn More
+            </Link>
+          </motion.div>
+        </div>
+        <SectionDivider style="wave" color="fill-ui-background" />
+      </section>
+
+      {/* Quick Links Section */}
+      <section className="relative py-24 bg-transparent">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-ui-text-primary mb-4">Explore SSF Muhimmath Daawa Sector</h2>
+            <p className="text-ui-text-secondary max-w-2xl mx-auto">
+              Discover the various aspects of our institution through these quick access points
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
+            {[
+              { icon: Trophy, title: 'Results', description: 'Check competition results and winners', link: '/results' },
+              { icon: Newspaper, title: 'Latest News', description: 'Read our latest announcements', link: '/news' },
+              { icon: Image, title: 'Gallery', description: 'View photos from past events', link: '/gallery' },
+              { icon: Users, title: 'About Us', description: 'Learn about our mission and history', link: '/about' },
+              { icon: MapPin, title: 'Contact', description: 'Get in touch with organizers', link: '/contact' }
+            ].map((item, index) => (
+              <motion.div key={item.title} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: index * 0.1 }}>
+                <Link to={item.link} className="block p-8 bg-ui-surface rounded-3xl shadow-subtle hover:shadow-subtle-lg hover:-translate-y-1 transition-all group h-full">
+                  <div className="w-16 h-16 bg-gradient-to-br from-brand-primary to-brand-secondary rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                    <item.icon className="w-8 h-8 text-white" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-ui-text-primary mb-2">{item.title}</h3>
+                  <p className="text-ui-text-secondary text-sm">{item.description}</p>
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+        <SectionDivider style="angle" color="fill-ui-surface" />
+      </section>
+      
+      {/* News & Announcements */}
+      <section className="relative py-24 bg-ui-surface">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-ui-text-primary mb-4">News & Announcements</h2>
+            <p className="text-ui-text-secondary max-w-2xl mx-auto">Stay informed with the latest updates and happenings.</p>
+          </div>
+          {loading.news ? (
+            <div className="flex justify-center h-[350px] items-center">
+              <Loader2 className="w-8 h-8 animate-spin text-brand-secondary" />
+            </div>
+          ) : news.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {news.map((item, index) => (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, y: 30 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: index * 0.15 }}
+                >
+                  <Link to="/news" className="block group">
+                    <div className="bg-white rounded-3xl shadow-subtle overflow-hidden h-full hover:shadow-subtle-lg transition-shadow">
+                      <img src={item.image_url || 'https://img-wrapper.vercel.app/image?url=https://placehold.co/600x400/A9E5FF/2E3A59?text=News'} alt={item.title} className="w-full h-56 object-cover" />
+                      <div className="p-6">
+                        <p className="text-sm text-ui-text-secondary mb-2 flex items-center gap-2"><Calendar size={14} /> {formatDate(item.created_at)}</p>
+                        <h3 className="font-bold text-lg text-ui-text-primary mb-3 group-hover:text-brand-secondary transition-colors">{item.title}</h3>
+                        <p className="text-sm text-ui-text-secondary line-clamp-3">{item.excerpt}</p>
+                      </div>
+                    </div>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center text-ui-text-secondary py-16">
+              <Newspaper className="w-12 h-12 mx-auto text-brand-secondary/50 mb-4" />
+              <h3 className="text-xl font-semibold">No news to display.</h3>
+              <p>Check back later for the latest announcements.</p>
+            </div>
+          )}
+          <div className="text-center mt-16">
+            <Link to="/news" className="bg-brand-secondary text-white px-8 py-4 rounded-2xl font-semibold hover:brightness-110 transition-all shadow-lg flex items-center gap-2 justify-center mx-auto w-fit">
+              View All News <ArrowRight size={20} />
+            </Link>
+          </div>
+        </div>
+        <SectionDivider style="zigzag" color="fill-ui-background" />
+      </section>
+
+      {/* Gallery Preview */}
+      <section className="relative py-24 bg-transparent overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold text-ui-text-primary mb-4">Gallery Highlights</h2>
+            <p className="text-ui-text-secondary max-w-2xl mx-auto">A glimpse into the vibrant moments of Muhimmath.</p>
+          </div>
+          {loading.gallery ? (
+            <div className="flex justify-center h-[350px] items-center">
+              <Loader2 className="w-8 h-8 animate-spin text-brand-secondary" />
+            </div>
+          ) : gallery.length > 0 ? (
+            <HorizontalGallery items={gallery} />
+          ) : (
+            <div className="text-center text-ui-text-secondary py-16">
+              <Image className="w-12 h-12 mx-auto text-brand-secondary/50 mb-4" />
+              <h3 className="text-xl font-semibold">The gallery is currently empty.</h3>
+              <p>Check back later for photos from our events.</p>
+            </div>
+          )}
+          <div className="text-center mt-16">
+            <Link to="/gallery" className="bg-brand-secondary text-white px-8 py-4 rounded-2xl font-semibold hover:brightness-110 transition-all shadow-lg flex items-center gap-2 justify-center mx-auto w-fit">
+              View Full Gallery <ArrowRight size={20} />
+            </Link>
+          </div>
+        </div>
+        <SectionDivider style="clouds" color="fill-ui-background" />
+      </section>
+    </div>
+  );
+};
+
+export default Home;

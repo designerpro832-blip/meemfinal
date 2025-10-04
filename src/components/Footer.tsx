@@ -1,0 +1,91 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { Facebook, Twitter, Instagram, Mail, Phone, MapPin } from 'lucide-react';
+import { useSiteSettings } from '../context/SiteSettingsContext';
+
+const Footer: React.FC = () => {
+  const { settings, loading } = useSiteSettings();
+
+  return (
+    <footer className="bg-brand-dark-blue text-ui-text-light">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-12">
+          {/* Logo and Description */}
+          <div className="col-span-1 md:col-span-2">
+            <Link to="/" className="group flex items-center space-x-3 mb-4">
+                {loading ? (
+                  <div className="w-12 h-12 bg-brand-secondary/20 rounded-lg animate-pulse"></div>
+                ) : settings.logo_url ? (
+                  <img src={settings.logo_url} alt={settings.site_title || 'Site Logo'} className="h-12 w-auto" />
+                ) : (
+                  <div className="w-12 h-12 bg-brand-secondary rounded-lg flex items-center justify-center transform group-hover:rotate-[-15deg] transition-transform duration-300">
+                    <span className="text-white font-bold text-3xl font-serif transform group-hover:rotate-[15deg] transition-transform duration-300">
+                      M
+                    </span>
+                  </div>
+                )}
+                <span className="text-ui-text-light font-bold text-xl tracking-tight">
+                  {settings.site_title || 'SSF Muhimmath'}
+                </span>
+            </Link>
+            <p className="text-ui-text-light/70 mb-6 max-w-md">
+              Fostering a generation of compassionate leaders through education, da'wa, and community service.
+            </p>
+            <div className="flex space-x-4">
+              <a href="#" className="text-ui-text-light/70 hover:text-brand-secondary transition-colors">
+                <Facebook className="w-5 h-5" />
+              </a>
+              <a href="#" className="text-ui-text-light/70 hover:text-brand-secondary transition-colors">
+                <Twitter className="w-5 h-5" />
+              </a>
+              <a href="#" className="text-ui-text-light/70 hover:text-brand-secondary transition-colors">
+                <Instagram className="w-5 h-5" />
+              </a>
+            </div>
+          </div>
+
+          {/* Quick Links */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+            <ul className="space-y-3">
+              <li><Link to="/about" className="text-ui-text-light/70 hover:text-brand-secondary transition-colors">About Us</Link></li>
+              <li><Link to="/news" className="text-ui-text-light/70 hover:text-brand-secondary transition-colors">News</Link></li>
+              <li><Link to="/gallery" className="text-ui-text-light/70 hover:text-brand-secondary transition-colors">Gallery</Link></li>
+              <li><Link to="/results" className="text-ui-text-light/70 hover:text-brand-secondary transition-colors">Results</Link></li>
+              <li><Link to="/contact" className="text-ui-text-light/70 hover:text-brand-secondary transition-colors">Contact</Link></li>
+            </ul>
+          </div>
+
+          {/* Contact Info */}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Contact Info</h3>
+            <div className="space-y-4">
+              <div className="flex items-start space-x-3">
+                <MapPin className="w-4 h-4 text-brand-secondary mt-1 flex-shrink-0" />
+                <span className="text-ui-text-light/70 text-sm">Muhimmathul Muslimeen Education Center Kasaragod</span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <Phone className="w-4 h-4 text-brand-secondary" />
+                <span className="text-ui-text-light/70 text-sm">+91 9400060851</span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <Mail className="w-4 h-4 text-brand-secondary" />
+                <span className="text-ui-text-light/70 text-sm">eyemedia313@gmail.com</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-white/20 mt-12 pt-8 text-center text-ui-text-light/70">
+          <p>
+            Developed By <a href="https://ibrahimkhaleel.vercel.app/" target="_blank" rel="noopener noreferrer" className="text-ui-text-light hover:text-brand-secondary transition-colors">Ibrahim Khaleel Kattathar</a>.
+            <span className="mx-2">|</span>
+            <Link to="/admin/login" className="text-ui-text-light hover:text-brand-secondary transition-colors">Admin</Link>
+          </p>
+        </div>
+      </div>
+    </footer>
+  );
+};
+
+export default Footer;
