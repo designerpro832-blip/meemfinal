@@ -1,0 +1,387 @@
+import React, { useState, useEffect } from 'react';
+import { Save, X, Loader2, AlertTriangle, UploadCloud, ChevronDown, Ruler, Image as ImageIcon, Layout, Download } from 'lucide-react';
+import { PosterTemplate, PosterStyles, TextStyle, Result } from '../../types';
+import { supabase } from '../../lib/supabase';
+import DynamicPoster from '../posters/DynamicPoster';
+import StyleControl from './StyleControl';
+import { defaultPosterStyles } from '../../lib/defaultStyles';
+import { downloadPosterAsJpeg } from '../../lib/downloadUtils';
+
+interface PosterEditorProps {
+  template: PosterTemplate;
+  onClose: () => void;
+  onSave: () => void;
+}
+
+const PosterEditor: React.FC<PosterEditorProps> = ({ template, onClose, onSave }) => {
+  const [fullTemplate, setFullTemplate] = useState<PosterTemplate | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  
+  const [styles, setStyles] = useState<PosterStyles>({});
+  const [currentLayout, setCurrentLayout] = useState('');
+  const [newBackgroundFile, setNewBackgroundFile] = useState<File | null>(null);
+  const [backgroundPreview, setBackgroundPreview] = useState<string | null>(null);
+  const [dimensions, setDimensions] = useState({ width: 500, height: 500 });
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ 'Poster Setup': true, General: true });
+
+  useEffect(() => {
+    const loadTemplate = async () => {
+      setIsLoading(true);
+      if (template.styles) {
+        setFullTemplate(template);
+      } else {
+        const { data, error } = await supabase.from('poster_templates').select('*').eq('id', template.id).single();
+        if (error) {
+          alert('Failed to load template details.');
+          onClose();
+        } else {
+          setFullTemplate(data);
+        }
+      }
+      setIsLoading(false);
+    };
+    loadTemplate();
+  }, [template, onClose]);
+
+  useEffect(() => {
+    if (fullTemplate) {
+      const layout = fullTemplate.layout_name;
+      const defaults = defaultPosterStyles[layout] || {};
+      const dbStyles = fullTemplate.styles || {};
+      const merged: PosterStyles = {};
+      
+      for (const key in defaults) {
+        merged[key] = { ...defaults[key], ...(dbStyles[key] || {}) };
+      }
+      for (const key in dbStyles) {
+        if (!merged[key]) {
+          merged[key] = dbStyles[key];
+        }
+      }
+
+      setStyles(merged);
+      setCurrentLayout(layout);
+      setBackgroundPreview(fullTemplate.background_image_url);
+      setDimensions({ width: fullTemplate.width || 500, height: fullTemplate.height || 500 });
+    }
+  }, [fullTemplate]);
+
+  const handleStyleChange = (element: string, newStyle: Partial<TextStyle>) => {
+    setStyles(prev => ({
+      ...prev,
+      [element]: { ...(prev[element] || {}), ...newStyle } as TextStyle,
+    }));
+  };
+  
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+        const file = e.target.files[0];
+        setNewBackgroundFile(file);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setBackgroundPreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!fullTemplate) return;
+    setIsSaving(true);
+    
+    const updateData: Partial<PosterTemplate> = {
+        styles: styles,
+        layout_name: currentLayout,
+        width: dimensions.width,
+        height: dimensions.height,
+    };
+
+    let newPublicUrl: string | null = null;
+    let newFilePath: string | null = null;
+    let oldImagePath: string | null = null;
+
+    try {
+        if (newBackgroundFile) {
+            const fileExtension = newBackgroundFile.name.split('.').pop();
+            const uniqueId = fullTemplate.component_name || `${fullTemplate.name.replace(/\s+/g, '-')}-${Date.now()}`;
+            newFilePath = `public/${uniqueId}.${fileExtension}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('poster_backgrounds')
+                .upload(newFilePath, newBackgroundFile, { upsert: true });
+            if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`);
+
+            const { data: urlData } = supabase.storage
+                .from('poster_backgrounds')
+                .getPublicUrl(newFilePath);
+            
+            if (!urlData?.publicUrl) throw new Error("Could not get public URL for new background.");
+            newPublicUrl = urlData.publicUrl;
+
+            updateData.background_image_url = newPublicUrl;
+            updateData.thumbnail_url = newPublicUrl;
+
+            if (fullTemplate.background_image_url) {
+                try {
+                    const urlParts = fullTemplate.background_image_url.split('/poster_backgrounds/');
+                    if (urlParts.length > 1) {
+                        oldImagePath = decodeURIComponent(urlParts[1]);
+                        if (oldImagePath === newFilePath) oldImagePath = null;
+                    }
+                } catch (e) {
+                    console.warn("Could not parse old background URL for deletion.", e);
+                }
+            }
+        }
+        
+        const { error: dbError } = await supabase
+            .from('poster_templates')
+            .update(updateData)
+            .eq('id', fullTemplate.id);
+
+        if (dbError) throw new Error(`Database update failed: ${dbError.message}`);
+
+        if (oldImagePath) {
+            const { error: deleteError } = await supabase.storage.from('poster_backgrounds').remove([oldImagePath]);
+            if (deleteError) {
+                console.warn(`Successfully updated template, but failed to delete old background: ${deleteError.message}`);
+            }
+        }
+
+        onSave();
+        onClose();
+
+    } catch (err: any) {
+        alert(`Error saving template: ${err.message}`);
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
+  const handleDownloadClick = async () => {
+    if (!fullTemplate || isDownloading) return;
+    setIsDownloading(true);
+
+    try {
+        const safeTemplateName = fullTemplate.name.toLowerCase().replace(/[^a-z0-9]/g, '-') || 'poster-preview';
+
+        await downloadPosterAsJpeg({
+            component: (
+                <DynamicPoster
+                    template={{
+                        ...fullTemplate,
+                        layout_name: currentLayout,
+                        background_image_url: backgroundPreview,
+                        width: dimensions.width,
+                        height: dimensions.height,
+                    }}
+                    styles={styles}
+                    program={mockProgram}
+                    winners={mockWinners}
+                    resultNumber={101}
+                />
+            ),
+            width: dimensions.width,
+            height: dimensions.height,
+            fileName: `meemfest-preview-${safeTemplateName}.jpeg`,
+            backgroundImageUrl: backgroundPreview,
+        });
+
+    } catch (err) {
+        console.error('Failed to download image preview', err);
+        alert('Sorry, there was an error downloading the poster preview.');
+    } finally {
+        setIsDownloading(false);
+    }
+  };
+  
+  const handleLayoutSelection = (newLayout: string) => {
+    if (!fullTemplate) return;
+    setCurrentLayout(newLayout);
+    const defaultStylesForLayout = defaultPosterStyles[newLayout] || {};
+    const existingStyles = fullTemplate.styles || {};
+    const newMergedStyles: PosterStyles = {};
+    for (const key in defaultStylesForLayout) {
+      newMergedStyles[key] = { ...defaultStylesForLayout[key], ...(existingStyles[key] || {}) };
+    }
+    setStyles(newMergedStyles);
+  };
+
+  const toggleSection = (section: string) => {
+    setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const styleGroups = {
+    'General': ['resultNumber', 'programName', 'category'],
+    'Winner 1': ['winner1Name', 'winner1Team'],
+    'Winner 2': ['winner2Name', 'winner2Team'],
+    'Winner 3': ['winner3Name', 'winner3Team'],
+    'Footer': ['footerTitle', 'footerSubtitle', 'headerText', 'mainTitle', 'orgName', 'orgSubName', 'headerTitle', 'footerText'],
+  };
+
+  const mockProgram = { event: 'Sample Program', category: 'Sample Category' };
+  const mockWinners: Result[] = [
+    { id: '1', participant: 'First Winner', school: 'Team A', position: 1, created_at: '', event: '', category: '', year: '', result_number: 1 },
+    { id: '2', participant: 'Second Winner', school: 'Team B', position: 2, created_at: '', event: '', category: '', year: '', result_number: 1 },
+    { id: '3', participant: 'Third Winner', school: 'Team C', position: 3, created_at: '', event: '', category: '', year: '', result_number: 1 },
+  ];
+
+  const layoutOptions = Object.keys(defaultPosterStyles);
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+      <div className="bg-gray-100 rounded-lg shadow-2xl w-full max-w-7xl h-[95vh] flex flex-col">
+        <header className="flex items-center justify-between p-4 border-b bg-white rounded-t-lg">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">Style Editor</h2>
+            <p className="text-sm text-gray-500">Editing: <span className="font-semibold">{template.name}</span></p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={handleDownloadClick} disabled={isDownloading || isLoading || !currentLayout} className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50">
+              {isDownloading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+              {isDownloading ? 'Downloading...' : 'Download Preview'}
+            </button>
+            <button onClick={handleSave} disabled={isSaving || isLoading || !currentLayout} className="bg-brand-primary text-white px-4 py-2 rounded-lg flex items-center gap-2 disabled:opacity-50">
+              {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+              {isSaving ? 'Saving...' : 'Save & Close'}
+            </button>
+            <button onClick={onClose} className="p-2 rounded-full bg-gray-200 hover:bg-gray-300">
+              <X size={20} />
+            </button>
+          </div>
+        </header>
+
+        <div className="flex-grow grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 overflow-hidden">
+          {isLoading || !fullTemplate ? (
+            <div className="lg:col-span-3 flex flex-col items-center justify-center h-full bg-gray-200 rounded-lg p-8 text-center">
+                <Loader2 className="w-12 h-12 text-brand-primary animate-spin mb-4" />
+                <p className="text-gray-600">Loading Editor...</p>
+            </div>
+          ) : !currentLayout ? (
+            <div className="lg:col-span-3 flex flex-col items-center justify-center h-full bg-gray-200 rounded-lg p-8 text-center">
+              <AlertTriangle className="w-16 h-16 text-amber-500 mb-4" />
+              <h3 className="text-2xl font-bold text-gray-800">Layout Missing</h3>
+              <p className="text-gray-600 mb-6 max-w-md">This poster template doesn't have a layout assigned. Please select a base layout to begin editing.</p>
+              <select
+                onChange={(e) => handleLayoutSelection(e.target.value)}
+                defaultValue=""
+                className="p-3 border border-gray-300 rounded-lg mb-4 w-full max-w-sm"
+              >
+                <option value="" disabled>-- Select a Layout --</option>
+                {layoutOptions.map(layout => (
+                  <option key={layout} value={layout}>{layout.replace(/([A-Z])/g, ' $1').trim()}</option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <>
+              <div className="lg:col-span-2 bg-gray-800 rounded-lg flex items-center justify-center p-4 overflow-auto">
+                <div className="w-full max-w-[600px] mx-auto">
+                    <div 
+                        style={{ width: '100%', aspectRatio: `${dimensions.width} / ${dimensions.height}` }} 
+                        className="shadow-lg bg-white"
+                    >
+                        <DynamicPoster
+                            template={{
+                                ...fullTemplate, 
+                                layout_name: currentLayout,
+                                background_image_url: backgroundPreview,
+                                width: dimensions.width,
+                                height: dimensions.height
+                            }}
+                            styles={styles}
+                            program={mockProgram}
+                            winners={mockWinners}
+                            resultNumber={101}
+                        />
+                    </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-1 bg-white rounded-lg p-4 overflow-y-auto space-y-2">
+                <h3 className="font-bold text-lg mb-2">Editable Elements</h3>
+                
+                <div className="border border-gray-200 rounded-lg">
+                  <button onClick={() => toggleSection('Poster Setup')} className="w-full flex justify-between items-center p-3 text-left font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-t-lg">
+                    <span>Poster Setup</span>
+                    <ChevronDown className={`w-5 h-5 transition-transform ${openSections['Poster Setup'] ? 'rotate-180' : ''}`} />
+                  </button>
+                  {openSections['Poster Setup'] && (
+                    <div className="p-4 border-t border-gray-200 space-y-4">
+                      <div>
+                        <label className="text-sm font-semibold text-gray-600 flex items-center gap-2 mb-2"><Layout size={16} /> Layout</label>
+                        <select
+                          value={currentLayout}
+                          onChange={(e) => handleLayoutSelection(e.target.value)}
+                          className="w-full h-9 px-2 border border-gray-300 rounded-md"
+                        >
+                          {layoutOptions.map(layout => (
+                            <option key={layout} value={layout}>{layout.replace(/([A-Z])/g, ' $1').trim()}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                          <label className="text-sm font-semibold text-gray-600 flex items-center gap-2 mb-2"><Ruler size={16} /> Dimensions</label>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-gray-500 block mb-1">Width (px)</label>
+                                <input type="number" value={dimensions.width} onChange={(e) => setDimensions(d => ({...d, width: parseInt(e.target.value) || 1}))} className="w-full h-9 px-2 border border-gray-300 rounded-md" />
+                            </div>
+                            <div>
+                                <label className="text-xs text-gray-500 block mb-1">Height (px)</label>
+                                <input type="number" value={dimensions.height} onChange={(e) => setDimensions(d => ({...d, height: parseInt(e.target.value) || 1}))} className="w-full h-9 px-2 border border-gray-300 rounded-md" />
+                            </div>
+                          </div>
+                      </div>
+                      <div>
+                          <label className="text-sm font-semibold text-gray-600 flex items-center gap-2 mb-2"><ImageIcon size={16} /> Background</label>
+                          {backgroundPreview && <img src={backgroundPreview} alt="Background Preview" className="w-full h-24 object-cover rounded-md mb-2 border" />}
+                          <input type="file" id="bg-upload" className="hidden" onChange={handleFileChange} accept="image/*" />
+                          <label htmlFor="bg-upload" className="cursor-pointer w-full text-center bg-gray-200 text-gray-800 px-4 py-2 rounded-lg text-sm flex items-center justify-center gap-2 hover:bg-gray-300">
+                              <UploadCloud size={16} /> Change Background
+                          </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {Object.entries(styleGroups).map(([groupName, styleKeys]) => {
+                  const availableKeys = styleKeys.filter(key => styles[key]);
+                  if (availableKeys.length === 0) return null;
+
+                  return (
+                    <div key={groupName} className="border border-gray-200 rounded-lg">
+                      <button
+                        onClick={() => toggleSection(groupName)}
+                        className="w-full flex justify-between items-center p-3 text-left font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 rounded-t-lg"
+                      >
+                        <span>{groupName}</span>
+                        <ChevronDown className={`w-5 h-5 transition-transform ${openSections[groupName] ? 'rotate-180' : ''}`} />
+                      </button>
+                      {openSections[groupName] && (
+                        <div className="p-4 border-t border-gray-200 space-y-4">
+                          {availableKeys.map(key => (
+                            <StyleControl
+                              key={key}
+                              label={key}
+                              value={styles[key] as TextStyle}
+                              onChange={(update) => handleStyleChange(key, update)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default PosterEditor;

@@ -1,0 +1,218 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { Search, Loader2, Trophy, Users, Award, Medal, Download } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '../lib/supabase';
+import { Result, Team } from '../types';
+import PosterModal from '../components/PosterModal';
+
+const rankIcons = [
+  { icon: Trophy, color: 'text-amber-400' },
+  { icon: Medal, color: 'text-slate-400' },
+  { icon: Award, color: 'text-amber-600' },
+];
+
+const ProgramResultCard: React.FC<{
+  group: { event: string; category: string; winners: Result[]; result_number: number };
+  onPosterClick: () => void;
+}> = ({ group, onPosterClick }) => {
+  const topWinners = group.winners.slice(0, 3);
+  
+  return (
+    <div className="bg-ui-surface rounded-2xl shadow-subtle p-6 flex flex-col h-full hover:shadow-subtle-lg hover:-translate-y-1 transition-all duration-300">
+      <div className="flex-grow">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <p className="text-sm text-ui-text-secondary">{group.category}</p>
+            <h3 className="text-lg font-bold text-ui-text-primary leading-tight">{group.event}</h3>
+          </div>
+          <div className="font-mono font-bold text-brand-primary text-xl bg-ui-background px-2 py-1 rounded-md">
+            #{String(group.result_number).padStart(3, '0')}
+          </div>
+        </div>
+        <div className="space-y-3">
+          {topWinners.map((winner, index) => {
+            const RankIcon = rankIcons[index]?.icon || Award;
+            const iconColor = rankIcons[index]?.color || 'text-ui-text-secondary';
+            return (
+              <div key={winner.id} className="flex items-center gap-3 text-sm">
+                <RankIcon className={`w-5 h-5 flex-shrink-0 ${iconColor}`} />
+                <div className="truncate">
+                  <p className="font-semibold text-ui-text-primary truncate">{winner.participant}</p>
+                  <p className="text-ui-text-secondary truncate">{winner.school || 'Individual'}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <button
+        onClick={onPosterClick}
+        className="mt-6 w-full bg-brand-accent text-white font-semibold py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 hover:brightness-110 transition-transform transform hover:-translate-y-px shadow-md hover:shadow-lg"
+      >
+        <Download size={16} />
+        Download Poster
+      </button>
+    </div>
+  );
+};
+
+const TeamRankCard: React.FC<{ team: Team; rank: number }> = ({ team, rank }) => {
+    const rankColorClasses = [
+        'from-amber-400 to-yellow-500 text-white',
+        'from-slate-300 to-slate-400 text-slate-800',
+        'from-amber-600 to-yellow-700 text-white',
+    ];
+    const cardColor = rank <= 3 ? rankColorClasses[rank - 1] : 'from-ui-surface to-ui-surface text-ui-text-primary';
+    const RankIcon = rank <= 3 ? rankIcons[rank-1].icon : null;
+
+    return (
+        <div className={`relative rounded-2xl shadow-subtle p-5 flex items-center justify-between bg-gradient-to-r ${cardColor}`}>
+            <div className="flex items-center gap-4">
+                <div className={`font-bold text-3xl w-12 text-center opacity-80 ${rank > 3 ? 'text-ui-text-secondary' : ''}`}>
+                    {rank}
+                </div>
+                <div className="truncate">
+                    <p className="font-bold text-lg truncate">{team.name}</p>
+                </div>
+            </div>
+            <div className="text-right flex items-center gap-2">
+                {RankIcon && <RankIcon className="w-6 h-6 opacity-70" />}
+                <p className="font-bold text-2xl">{team.points} <span className="text-sm font-normal opacity-80">pts</span></p>
+            </div>
+        </div>
+    );
+};
+
+
+const Results: React.FC = () => {
+  const [results, setResults] = useState<Result[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState<'program' | 'team'>('program');
+  const [posterModalData, setPosterModalData] = useState<{ program: { event: string; category: string }; winners: Result[]; resultNumber: number } | null>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const [resultsResponse, teamsResponse] = await Promise.all([
+          supabase.from('results').select('*').order('created_at', { ascending: false }),
+          supabase.from('teams').select('*').order('points', { ascending: false })
+        ]);
+
+        if (resultsResponse.error) throw resultsResponse.error;
+        setResults(resultsResponse.data || []);
+
+        if (teamsResponse.error) throw teamsResponse.error;
+        setTeams(teamsResponse.data || []);
+
+      } catch (err: any) {
+        setError("Could not fetch results. Please ensure your Supabase project is connected and running.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const groupedResults = useMemo(() => {
+    const groups: { [key: string]: { event: string; category: string; year: string; result_number: number; winners: Result[] } } = {};
+    results.forEach(result => {
+        const key = `${result.event}-${result.category}-${result.year}`;
+        if (!groups[key]) {
+            groups[key] = { event: result.event, category: result.category, year: result.year, result_number: result.result_number, winners: [] };
+        }
+        groups[key].winners.push(result);
+    });
+    Object.values(groups).forEach(group => group.winners.sort((a, b) => a.position - b.position));
+    return Object.values(groups).sort((a, b) => a.event.localeCompare(b.event));
+  }, [results]);
+
+  const filteredGroups = useMemo(() => groupedResults.filter(g =>
+      g.event.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      g.category.toLowerCase().includes(searchTerm.toLowerCase())
+  ), [groupedResults, searchTerm]);
+
+  const filteredTeams = useMemo(() => teams.filter(t => t.name.toLowerCase().includes(searchTerm.toLowerCase())), [teams, searchTerm]);
+  
+  const handleProgramClick = (group: { event: string; category: string; winners: Result[]; result_number: number }) => {
+    setPosterModalData({ program: { event: group.event, category: group.category }, winners: group.winners, resultNumber: group.result_number });
+  };
+
+  return (
+    <div className="py-16 bg-ui-background">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }} className="mb-8">
+          <h1 className="text-4xl font-bold text-ui-text-primary mb-2">Results</h1>
+          <p className="text-ui-text-secondary">
+            {loading ? 'Loading...' : `Published ${activeTab === 'program' ? filteredGroups.length : filteredTeams.length} results`}
+          </p>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.1 }} className="mb-8 space-y-4">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex items-center bg-gray-200/50 rounded-full p-1.5">
+              <button onClick={() => setActiveTab('program')} className={`px-6 py-2 rounded-full text-sm font-semibold transition-colors flex items-center gap-2 ${activeTab === 'program' ? 'bg-white text-brand-primary shadow-md' : 'text-ui-text-secondary hover:bg-black/5'}`}>
+                <Trophy size={16} /> Program
+              </button>
+              <button onClick={() => setActiveTab('team')} className={`px-6 py-2 rounded-full text-sm font-semibold transition-colors flex items-center gap-2 ${activeTab === 'team' ? 'bg-white text-brand-primary shadow-md' : 'text-ui-text-secondary hover:bg-black/5'}`}>
+                <Users size={16} /> Team
+              </button>
+            </div>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-ui-text-secondary/50 w-5 h-5" />
+            <input type="text" placeholder={`Search by ${activeTab === 'program' ? 'program or category' : 'team name'}...`} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-12 pr-4 py-4 border border-transparent rounded-2xl focus:ring-2 focus:ring-brand-primary bg-ui-surface shadow-subtle" />
+          </div>
+        </motion.div>
+
+        {loading ? (
+          <div className="flex justify-center items-center py-12"><Loader2 className="w-8 h-8 text-brand-primary animate-spin" /></div>
+        ) : error ? (
+          <div className="text-center py-12">
+            <div className="bg-rose-100 border border-rose-400 text-rose-700 px-4 py-3 rounded-2xl inline-block"><h3 className="font-bold">Connection Error</h3><p>{error}</p></div>
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            {activeTab === 'program' ? (
+              <motion.div key="program-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
+                {filteredGroups.length === 0 ? (
+                  <div className="text-center py-12"><div className="text-ui-text-secondary/40 text-6xl mb-4">🔍</div><h3 className="text-xl font-semibold text-ui-text-secondary/80 mb-2">No Programs Found</h3><p className="text-ui-text-secondary/70">Try adjusting your search criteria.</p></div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {filteredGroups.map((group, index) => (
+                      <motion.div key={`${group.event}-${group.category}`} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: (index % 24) * 0.05 }}>
+                        <ProgramResultCard group={group} onPosterClick={() => handleProgramClick(group)} />
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div key="team-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
+                {filteredTeams.length === 0 ? (
+                  <div className="text-center py-12"><div className="text-ui-text-secondary/40 text-6xl mb-4">👥</div><h3 className="text-xl font-semibold text-ui-text-secondary/80 mb-2">No Teams Found</h3><p className="text-ui-text-secondary/70">Try adjusting your search criteria.</p></div>
+                ) : (
+                  <div className="space-y-3">
+                    {filteredTeams.map((team, index) => (
+                      <motion.div key={team.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: index * 0.05 }}>
+                        <TeamRankCard team={team} rank={index + 1} />
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
+      </div>
+      <PosterModal isOpen={!!posterModalData} onClose={() => setPosterModalData(null)} data={posterModalData} />
+    </div>
+  );
+};
+
+export default Results;

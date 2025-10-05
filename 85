@@ -1,0 +1,109 @@
+import React from 'react';
+import { createRoot, Root } from 'react-dom/client';
+import html2canvas from 'html2canvas';
+
+interface DownloadOptions {
+  component: React.ReactElement;
+  width: number;
+  height: number;
+  fileName: string;
+  backgroundImageUrl?: string | null;
+}
+
+/**
+ * Converts an image URL to a base64 Data URI to bypass CORS issues during canvas capture.
+ */
+const imageUrlToDataUri = async (url: string): Promise<string> => {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image. Status: ${response.status} ${response.statusText}`);
+  }
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+/**
+ * Renders a React component in a hidden container, waits for all assets (images, fonts)
+ * to load, captures it as a high-quality JPEG using html2canvas, and triggers a download.
+ */
+export const downloadPosterAsJpeg = async ({ component, width, height, fileName, backgroundImageUrl }: DownloadOptions): Promise<void> => {
+  const container = document.createElement('div');
+  // Style the container to be off-screen but still renderable
+  container.style.position = 'fixed';
+  container.style.top = '-9999px';
+  container.style.left = '0px';
+  container.style.width = `${width}px`;
+  container.style.height = `${height}px`;
+  document.body.appendChild(container);
+
+  let root: Root | null = null;
+  let finalComponent = component;
+
+  try {
+    // 1. Pre-fetch the background image as a Data URI to prevent CORS/timing issues.
+    const backgroundDataUri = backgroundImageUrl 
+      ? await imageUrlToDataUri(backgroundImageUrl).catch(e => {
+          console.error("Failed to pre-fetch background image. It may not render.", e);
+          return null;
+        })
+      : null;
+
+    // Clone the component to pass the pre-fetched background and set it for download mode.
+    finalComponent = React.cloneElement(component, {
+        ...component.props,
+        template: {
+            ...component.props.template,
+            background_image_url: backgroundDataUri,
+        },
+        isForDownload: true,
+    });
+
+    // 2. Render the component into the hidden container.
+    root = createRoot(container);
+    root.render(finalComponent);
+
+    // 3. Wait for all assets to be fully loaded and rendered.
+    // Brief delay for React to mount and render.
+    await new Promise(resolve => setTimeout(resolve, 150));
+    
+    // Explicitly wait for all fonts declared in CSS to be ready.
+    await document.fonts.ready.catch(e => {
+      console.warn("Error waiting for document fonts to be ready.", e);
+    });
+
+    // Final small delay to ensure the browser has painted the final state.
+    await new Promise(resolve => setTimeout(resolve, 250));
+
+    // 4. Capture the container using html2canvas.
+    const canvas = await html2canvas(container, {
+      useCORS: true,
+      allowTaint: true,
+      scale: 2, // Capture at 2x resolution for higher quality
+      backgroundColor: '#ffffff', // Set a solid background to prevent transparency issues
+      logging: false,
+    });
+
+    // 5. Convert the canvas to a JPEG Data URL and trigger the download.
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.95); // 95% quality
+    const link = document.createElement('a');
+    link.download = fileName;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+  } finally {
+    // 6. Clean up the DOM by unmounting the React component and removing the container.
+    if (root) {
+      root.unmount();
+    }
+    if (container.parentNode) {
+      container.parentNode.removeChild(container);
+    }
+  }
+};

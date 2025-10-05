@@ -1,0 +1,110 @@
+/* Fractul Variable - The primary font for the site */
+@font-face {
+  font-family: 'Fractul Variable';
+  src: url('/fonts/Fractul-Variable.woff2') format('woff2'),
+       url('/fonts/Fractul-Variable.woff') format('woff'),
+       url('/fonts/Fractul-Variable.ttf') format('truetype');
+  font-weight: 100 900;
+  font-display: swap;
+  font-style: normal;
+}
+
+/* 1. Playfair Display */
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('/fonts/playfairdisplay-regular.woff2') format('woff2'),
+       url('/fonts/playfairdisplay-regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 2. Montserrat */
+@font-face {
+  font-family: 'Montserrat';
+  src: url('/fonts/montserrat-regular.woff2') format('woff2'),
+       url('/fonts/montserrat-regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 3. Oswald */
+@font-face {
+  font-family: 'Oswald';
+  src: url('/fonts/oswald-regular.woff2') format('woff2'),
+       url('/fonts/oswald-regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 4. Lora */
+@font-face {
+  font-family: 'Lora';
+  src: url('/fonts/lora-regular.woff2') format('woff2'),
+       url('/fonts/lora-regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 5. Raleway */
+@font-face {
+  font-family: 'Raleway';
+  src: url('/fonts/raleway-regular.woff2') format('woff2'),
+       url('/fonts/raleway-regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 6. Merriweather */
+@font-face {
+  font-family: 'Merriweather';
+  src: url('/fonts/merriweather-regular.woff2') format('woff2'),
+       url('/fonts/merriweather-regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 7. Open Sans */
+@font-face {
+  font-family: 'Open Sans';
+  src: url('/fonts/opensans-regular.woff2') format('woff2'),
+       url('/fonts/opensans-regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 8. Anton */
+@font-face {
+  font-family: 'Anton';
+  src: url('/fonts/anton-regular.woff2') format('woff2'),
+       url('/fonts/anton-regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 9. Pacifico */
+@font-face {
+  font-family: 'Pacifico';
+  src: url('/fonts/pacifico-regular.woff2') format('woff2'),
+       url('/fonts/pacifico-regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 10. Bebas Neue */
+@font-face {
+  font-family: 'Bebas Neue';
+  src: url('/fonts/bebasneue-regular.woff2') format('woff2'),
+       url('/fonts/bebasneue-regular.woff') format('woff');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}

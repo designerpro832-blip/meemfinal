@@ -1,0 +1,44 @@
+const defaultTheme = require('tailwindcss/defaultTheme')
+
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    './src/**/*.{js,jsx,ts,tsx}',
+  ],
+  theme: {
+    extend: {
+      colors: {
+        'brand': {
+          'primary': '#082026',        // Very Dark Blue/Teal
+          'secondary': '#134D80',       // Mid Blue
+          'accent': '#00A9E5',          // Bright Blue
+          'coral': '#FF6B6B',           // Coral Red
+          'dark-blue': '#082026',
+          'mid-blue': '#134D80',
+          'light-blue': '#00A9E5',
+          'dark-teal': '#065A5A',
+        },
+        'ui': {
+          'background': '#F0F5FA',      // Lightest Blue-Gray
+          'surface': '#FFFFFF',
+          'text-primary': '#082026',
+          'text-secondary': '#5A6C71',
+          'text-light': '#FFFFFF',
+          'border': 'rgba(0,0,0,0.08)',
+        }
+      },
+      fontFamily: {
+        sans: ['Fractul Variable', ...defaultTheme.fontFamily.sans],
+        serif: ['Georgia', 'serif'],
+      },
+      borderRadius: {
+        '4xl': '2rem',
+      },
+      boxShadow: {
+        'subtle': '0 4px 12px 0 rgba(0, 0, 0, 0.05)',
+        'subtle-lg': '0 8px 20px 0 rgba(0, 0, 0, 0.05)',
+      }
+    }
+  },
+  plugins: [],
+};
